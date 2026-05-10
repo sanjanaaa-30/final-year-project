@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 const userProfileSchema = new mongoose.Schema(
   {
+    uid:                 { type: String, index: true, sparse: true },  // client-generated UUID
     name:                { type: String, required: true, trim: true },
     qualification:       { type: String, required: true },
     customQualification: { type: String, default: '' },

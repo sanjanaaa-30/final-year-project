@@ -98,7 +98,7 @@ async function ollamaChatNonStream(message, profile) {
 /** POST /onboarding — save a new user profile */
 app.post('/onboarding', async (req, res, next) => {
   try {
-    const { name, qualification, customQualification, stream, customStream, experience, customExperience, themeUsed } = req.body || {};
+    const { uid, name, qualification, customQualification, stream, customStream, experience, customExperience, themeUsed } = req.body || {};
 
     if (!name || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({ detail: 'Name is required.' });
@@ -118,6 +118,7 @@ app.post('/onboarding', async (req, res, next) => {
     }
 
     const profile = await UserProfile.create({
+      uid: uid || undefined,
       name: name.trim(),
       qualification,
       customQualification: customQualification?.trim() || '',
@@ -138,6 +139,20 @@ app.post('/onboarding', async (req, res, next) => {
 app.get('/onboarding', async (_req, res, next) => {
   try {
     const profiles = await UserProfile.find().sort({ createdAt: -1 }).lean();
+    res.json(profiles);
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** GET /onboarding/list — lightweight list for Switch User dropdown */
+app.get('/onboarding/list', async (_req, res, next) => {
+  try {
+    const profiles = await UserProfile
+      .find()
+      .select('_id uid name qualification customQualification stream experience createdAt')
+      .sort({ createdAt: -1 })
+      .lean();
     res.json(profiles);
   } catch (e) {
     next(e);
@@ -228,9 +243,10 @@ app.post('/chat/stream', async (req, res) => {
   }
 });
 
-app.get('/chat/sessions', async (_req, res, next) => {
+app.get('/chat/sessions', async (req, res, next) => {
   try {
-    const docs = await ChatSession.find().sort({ updated_at: -1 }).lean();
+    const userId = req.query.userId || 'legacy';
+    const docs = await ChatSession.find({ userId }).sort({ updated_at: -1 }).lean();
     res.json(docs.map(sessionDocToApi));
   } catch (e) {
     next(e);
@@ -251,7 +267,7 @@ app.get('/chat/sessions/:id', async (req, res, next) => {
 
 app.post('/chat/sessions', async (req, res, next) => {
   try {
-    const { title, messages } = req.body || {};
+    const { title, messages, userId } = req.body || {};
     if (typeof title !== 'string' || !Array.isArray(messages)) {
       return res.status(400).json({ detail: 'Invalid session payload' });
     }
@@ -259,6 +275,7 @@ app.post('/chat/sessions', async (req, res, next) => {
     const id = randomUUID();
     const doc = await ChatSession.create({
       id,
+      userId: userId || 'legacy',
       title,
       messages,
       created_at: now,

@@ -113,11 +113,11 @@
   display: flex;
   flex-direction: column;
   z-index: 40;
-  transition: transform 0.2s ease, width 0.22s ease, opacity 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.22s ease, width 0.22s ease, opacity 0.22s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   overflow: hidden;
 }
 
-/* Desktop & wide screens: collapse when not .is-open (hamburger toggles) */
+/* Desktop & wide screens: collapse to icon-only taskbar when not .is-open */
 @media (min-width: 900px) {
   .sidebar {
     position: relative;
@@ -125,14 +125,33 @@
   }
 
   .sidebar:not(.is-open) {
-    width: 0;
-    min-width: 0;
-    padding: 0;
-    margin: 0;
-    opacity: 0;
-    border-right-width: 0;
-    border-right-color: transparent;
-    pointer-events: none;
+    width: 56px;
+    min-width: 56px;
+    overflow: hidden;
+  }
+
+  /* Hide all text-heavy / full-width elements when collapsed */
+  .sidebar:not(.is-open) .sidebar-brand,
+  .sidebar:not(.is-open) .sidebar-section-label,
+  .sidebar:not(.is-open) .sidebar-sessions,
+  .sidebar:not(.is-open) .sidebar-new-user-label,
+  .sidebar:not(.is-open) .session-row-body,
+  .sidebar:not(.is-open) .session-row-delete,
+  .sidebar:not(.is-open) .sidebar-new-chat,
+  .sidebar:not(.is-open) .sidebar-new-user,
+  .sidebar:not(.is-open) .sidebar-switch-user,
+  .sidebar:not(.is-open) .switch-user-panel {
+    display: none;
+  }
+
+  /* Show compact icon column in collapsed state */
+  .sidebar:not(.is-open) .sidebar-compact-icons {
+    display: flex;
+  }
+
+  /* Hide compact icon column when expanded */
+  .sidebar.is-open .sidebar-compact-icons {
+    display: none;
   }
 }
 
@@ -169,12 +188,13 @@
   color: var(--text);
 }
 
-.sidebar-new-chat {
+.sidebar-new-chat,
+.sidebar-new-user {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin: 12px;
+  margin: 8px 12px;
   padding: 10px 14px;
   border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
   border-radius: 10px;
@@ -186,17 +206,250 @@
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   box-shadow: var(--btn-glow);
-  transition: background 0.15s, border-color 0.15s, box-shadow 0.2s;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.2s, width 0.22s, padding 0.22s;
+  white-space: nowrap;
+  overflow: hidden;
+  width: calc(100% - 24px);
 }
 
-.sidebar-new-chat:hover {
+.sidebar-new-chat:hover,
+.sidebar-new-user:hover {
   background: var(--toolbar-hover);
   border-color: color-mix(in srgb, var(--accent) 65%, transparent);
   box-shadow: var(--btn-glow-strong);
 }
 
-.sidebar-new-chat .icon {
+.sidebar-new-user {
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+  background: color-mix(in srgb, var(--surface) 36%, transparent);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.sidebar-new-user:hover {
+  color: var(--text);
+}
+
+.sidebar-new-chat .icon,
+.sidebar-new-user .icon,
+.sidebar-switch-user .icon {
   opacity: 0.85;
+  flex-shrink: 0;
+}
+
+/* ── Switch User button ── */
+.sidebar-switch-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 12px 8px;
+  padding: 10px 14px;
+  border: 1px solid rgba(181, 123, 238, 0.35);
+  border-radius: 10px;
+  background: rgba(181, 123, 238, 0.07);
+  color: #b57bee;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 0 12px rgba(181, 123, 238, 0.18);
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.2s;
+  white-space: nowrap;
+  overflow: hidden;
+  width: calc(100% - 24px);
+}
+
+.sidebar-switch-user:hover {
+  background: rgba(181, 123, 238, 0.14);
+  border-color: rgba(181, 123, 238, 0.62);
+  box-shadow: 0 0 22px rgba(181, 123, 238, 0.36), 0 0 44px rgba(181, 123, 238, 0.18);
+  color: #cc99ff;
+}
+
+.sidebar-switch-user.is-open {
+  background: rgba(181, 123, 238, 0.16);
+  border-color: rgba(181, 123, 238, 0.70);
+  color: #cc99ff;
+}
+
+.switch-user-chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: transform 0.2s;
+}
+
+.sidebar-switch-user.is-open .switch-user-chevron {
+  transform: rotate(180deg);
+}
+
+/* ── Switch User dropdown panel ── */
+.switch-user-panel {
+  margin: 0 8px 8px;
+  border: 1px solid rgba(181, 123, 238, 0.25);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sidebar-bg) 88%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(181, 123, 238, 0.12);
+  animation: su-panel-in 0.18s ease;
+}
+
+@keyframes su-panel-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.switch-user-empty {
+  padding: 14px 16px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.switch-user-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid rgba(181, 123, 238, 0.10);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.switch-user-card:last-child {
+  border-bottom: none;
+}
+
+.switch-user-card:hover {
+  background: rgba(181, 123, 238, 0.10);
+}
+
+.switch-user-card.is-active {
+  background: rgba(181, 123, 238, 0.14);
+}
+
+.switch-user-avatar {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(181, 123, 238, 0.70), rgba(100, 60, 180, 0.70));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  box-shadow: 0 0 10px rgba(181, 123, 238, 0.38);
+}
+
+.switch-user-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.switch-user-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.switch-user-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.switch-user-active-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #b57bee;
+  box-shadow: 0 0 6px rgba(181, 123, 238, 0.80);
+  animation: dot-pulse 2s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.85); }
+}
+
+/* Compact icon column shown only when sidebar is collapsed (desktop) */
+.sidebar-compact-icons {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0;
+  gap: 6px;
+}
+
+.sidebar-compact-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--accent);
+  cursor: pointer;
+  box-shadow: var(--btn-glow);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.2s;
+}
+
+.sidebar-compact-btn:hover {
+  background: var(--toolbar-hover);
+  color: var(--accent-hover);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: var(--btn-glow-strong);
+}
+
+/* New User compact icon — teal/accent tint */
+.sidebar-compact-btn.is-new-user {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.sidebar-compact-btn.is-new-user:hover {
+  color: var(--accent-hover);
+  border-color: color-mix(in srgb, var(--accent) 58%, transparent);
+  box-shadow: var(--btn-glow-strong);
+}
+
+/* Switch User compact icon — violet tint to visually distinguish */
+.sidebar-compact-btn.is-switch-user {
+  color: #b57bee;
+  border-color: rgba(181, 123, 238, 0.30);
+  background: rgba(181, 123, 238, 0.08);
+}
+
+.sidebar-compact-btn.is-switch-user:hover {
+  color: #cc99ff;
+  border-color: rgba(181, 123, 238, 0.60);
+  background: rgba(181, 123, 238, 0.16);
+  box-shadow: 0 0 18px rgba(181, 123, 238, 0.40), 0 0 36px rgba(181, 123, 238, 0.20);
 }
 
 .sidebar-section-label {
@@ -344,15 +597,15 @@
 }
 
 /* Centered robot (react-spline canvas) behind messages.
-   pointer-events: none on the wrapper keeps scroll working;
-   the canvas itself gets pointer-events: auto so mouse tracking fires. */
+   Both wrapper and canvas allow pointer events for cursor-tracking. 
+   The chat-scroll above (z-index 2) captures scroll; robot layer captures mouse move. */
 .robot-background-center {
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .robot-spline-viewer {
@@ -459,7 +712,10 @@
   outline-offset: 2px;
 }
 
-/* Chat scroll — messages only, robot sits as a sibling above */
+/* Chat scroll — messages only, robot sits as a sibling layer below.
+   pointer-events: none lets mouse movements fall through to the robot canvas
+   for cursor-tracking. The chat-inner (messages) re-enables events so users
+   can still click, select text, and scroll normally. */
 .chat-scroll {
   position: relative;
   flex: 1;
@@ -468,6 +724,8 @@
   -webkit-overflow-scrolling: touch;
   background: transparent;
   z-index: 2;
+  /* Pass mouse events through so the Spline robot can track the cursor */
+  pointer-events: none;
 }
 
 .chat-scroll-robot-layer {
@@ -482,7 +740,9 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  pointer-events: none;
+  /* Allow mouse events to reach the robot canvas for cursor-tracking.
+     Chat scroll & messages sit above (z-index 2) and handle their own events. */
+  pointer-events: auto;
 }
 
 /* fade overlay — starts below header, stops above composer */
@@ -507,6 +767,8 @@
   max-width: 800px;
   margin: 0 auto;
   padding: 24px 16px 32px;
+  /* Re-enable pointer events so messages are clickable and text is selectable */
+  pointer-events: auto;
 }
 
 .msg-row {

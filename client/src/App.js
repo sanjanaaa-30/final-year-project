@@ -10,12 +10,40 @@ function buildWelcomeText(profile) {
   return `Hello${name}! I'm your AI Career Counselor. Ask me anything about roles, skills, interviews, or your next career move.`;
 }
 
-// Read profile saved during onboarding (may be null on first load)
-function loadSavedProfile() {
+/** Generate a client-side UUID for user identity */
+function generateUid() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return `uid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/** Load all saved profiles from localStorage */
+function loadAllProfiles() {
+  try {
+    const raw = localStorage.getItem('ob_profiles');
+    return raw ? JSON.parse(raw) : [];
+  } catch (_) { return []; }
+}
+
+/** Save / update a profile entry in the ob_profiles list */
+function saveProfileToStore(uid, profile) {
+  const all = loadAllProfiles();
+  const idx = all.findIndex((p) => p.uid === uid);
+  if (idx >= 0) { all[idx] = { uid, profile }; }
+  else { all.push({ uid, profile }); }
+  try { localStorage.setItem('ob_profiles', JSON.stringify(all)); } catch (_) {}
+}
+
+/** Get the currently active profile from localStorage */
+function loadActiveProfile() {
   try {
     const raw = localStorage.getItem('ob_profile');
     return raw ? JSON.parse(raw) : null;
   } catch (_) { return null; }
+}
+
+/** Get the active user's uid */
+function loadActiveUid() {
+  return localStorage.getItem('ob_active_uid') || null;
 }
 
 function IconMenu({ className }) {
@@ -90,6 +118,28 @@ function IconTrash({ className }) {
     </svg>
   );
 }
+function IconUserPlus({ className }) {
+  // Person + plus sign — "New User" (create brand new profile)
+  return (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <line x1="20" y1="8" x2="20" y2="14" />
+      <line x1="23" y1="11" x2="17" y2="11" />
+    </svg>
+  );
+}
+function IconUsersSwap({ className }) {
+  // Two silhouettes with swap arrows — "Switch User"
+  return (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 00-3-3.87" />
+      <path d="M16 3.13a4 4 0 010 7.75" />
+    </svg>
+  );
+}
 function IconPlaySpeak({ className }) {
   return (
     <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -150,8 +200,13 @@ function speakText(text, { muted, onEnd, voice }) {
 }
 
 function App() {
-  // Load persisted profile once at startup
-  const savedProfileRef = React.useRef(loadSavedProfile());
+  // ── User identity ──
+  const savedProfileRef = React.useRef(loadActiveProfile());
+  const activeUidRef    = React.useRef(loadActiveUid());
+
+  const [activeUserId,   setActiveUserId]   = useState(() => loadActiveUid());
+  const [allProfiles,    setAllProfiles]    = useState(() => loadAllProfiles());
+  const [switchUserOpen, setSwitchUserOpen] = useState(false);
 
   const [messages, setMessages] = useState(() => [
     {
@@ -187,11 +242,25 @@ function App() {
 
   const themeClass = isDarkMode ? 'theme-dark' : 'theme-light';
 
+  /** Called when onboarding form is submitted — assigns uid and persists profile */
   function handleOnboardingComplete(profile) {
+    const uid = activeUidRef.current || generateUid();
+    activeUidRef.current = uid;
+
     try { localStorage.setItem('ob_profile', JSON.stringify(profile)); } catch (_) {}
+    localStorage.setItem('ob_active_uid', uid);
     localStorage.setItem('ob_done', '1');
+    saveProfileToStore(uid, profile);
+
     savedProfileRef.current = profile;
-    // Update the welcome message to include the real name now that we have it
+    setActiveUserId(uid);
+    setAllProfiles(loadAllProfiles());
+
+    // Reset session context for this user
+    persistTailRef.current = Promise.resolve();
+    currentSessionIdRef.current = null;
+    setCurrentSessionId(null);
+
     setMessages([
       {
         id: 'welcome',
@@ -201,6 +270,66 @@ function App() {
       },
     ]);
     setOnboarded(true);
+  }
+
+  /** Create a brand-new user — generate fresh uid, clear active, show onboarding form */
+  function handleNewUser() {
+    stopSpeech();
+    stopDictation();
+    const newUid = generateUid();
+    activeUidRef.current = newUid;
+    localStorage.removeItem('ob_done');
+    localStorage.removeItem('ob_profile');
+    localStorage.setItem('ob_active_uid', newUid);
+    savedProfileRef.current = null;
+    persistTailRef.current = Promise.resolve();
+    currentSessionIdRef.current = null;
+    setCurrentSessionId(null);
+    setActiveUserId(newUid);
+    setMessages([
+      {
+        id: 'welcome',
+        from: 'bot',
+        text: buildWelcomeText(null),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
+    setInput('');
+    setLiveTranscript('');
+    setSwitchUserOpen(false);
+    setOnboarded(false);
+  }
+
+  /** Switch to an existing saved user without re-onboarding */
+  function handleSwitchUser(uid) {
+    stopSpeech();
+    stopDictation();
+    const entry = loadAllProfiles().find((p) => p.uid === uid);
+    if (!entry) return;
+    const profile = entry.profile;
+
+    activeUidRef.current = uid;
+    savedProfileRef.current = profile;
+    localStorage.setItem('ob_active_uid', uid);
+    localStorage.setItem('ob_profile', JSON.stringify(profile));
+    localStorage.setItem('ob_done', '1');
+
+    persistTailRef.current = Promise.resolve();
+    currentSessionIdRef.current = null;
+    setCurrentSessionId(null);
+    setActiveUserId(uid);
+    setSwitchUserOpen(false);
+    setMessages([
+      {
+        id: 'welcome',
+        from: 'bot',
+        text: buildWelcomeText(profile),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
+    setInput('');
+    setLiveTranscript('');
+    if (window.innerWidth < 900) setSidebarOpen(false);
   }
 
   useEffect(() => {
@@ -249,10 +378,11 @@ function App() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, loading]);
 
-  const loadChatSessions = useCallback(async () => {
+  const loadChatSessions = useCallback(async (uid) => {
+    const userId = uid || activeUidRef.current || 'legacy';
     setSessionsLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/chat/sessions`);
+      const response = await fetch(`${API_BASE}/chat/sessions?userId=${encodeURIComponent(userId)}`);
       if (!response.ok) throw new Error('Failed to load sessions');
       const sessions = await response.json();
       setChatSessions(Array.isArray(sessions) ? sessions : []);
@@ -264,9 +394,16 @@ function App() {
     }
   }, []);
 
+  // Reload sessions whenever the active user changes
+  useEffect(() => {
+    loadChatSessions(activeUserId);
+  }, [loadChatSessions, activeUserId]);
+
+  // Also reload on initial mount (covers page refresh)
   useEffect(() => {
     loadChatSessions();
-  }, [loadChatSessions]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(
     () => () => {
@@ -291,8 +428,10 @@ function App() {
     async (msgs) => {
       const conv = msgs.filter((m) => m.id !== 'welcome');
       if (conv.length < 2) return;
+      const userId = activeUidRef.current || 'legacy';
 
       const payload = {
+        userId,
         title: firstUserSnippet(msgs),
         messages: conv.map((msg) => ({
           role: msg.from,
@@ -314,7 +453,7 @@ function App() {
           const r = await fetch(`${API_BASE}/chat/sessions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: payload.title, messages: payload.messages }),
+            body: JSON.stringify({ userId: payload.userId, title: payload.title, messages: payload.messages }),
           });
           if (!r.ok) throw new Error('POST failed');
           const created = await r.json();
@@ -600,16 +739,110 @@ function App() {
   return (
     <div className={`app-root ${themeClass}`}>
       <aside className={`sidebar ${sidebarOpen ? 'is-open' : ''}`} aria-label="Chat history">
+
+        {/* ── Compact icon-only strip (visible when sidebar is collapsed on desktop) ── */}
+        <div className="sidebar-compact-icons">
+          <button
+            type="button"
+            className="sidebar-compact-btn"
+            onClick={startNewChat}
+            title="New chat"
+            aria-label="New chat"
+          >
+            <IconPlus />
+          </button>
+          <button
+            type="button"
+            className="sidebar-compact-btn is-new-user"
+            onClick={handleNewUser}
+            title="New user — create a new profile"
+            aria-label="New user"
+          >
+            <IconUserPlus />
+          </button>
+          <button
+            type="button"
+            className="sidebar-compact-btn is-switch-user"
+            onClick={() => setSwitchUserOpen((o) => !o)}
+            title="Switch user"
+            aria-label="Switch user"
+          >
+            <IconUsersSwap />
+          </button>
+        </div>
+
+        {/* ── Full sidebar content (visible when sidebar is expanded) ── */}
         <div className="sidebar-brand">
           <div className="sidebar-logo">Career</div>
           <button type="button" className="sidebar-close-mobile" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar">
             ×
           </button>
         </div>
+
         <button type="button" className="sidebar-new-chat" onClick={startNewChat}>
           <IconPlus className="icon" />
-          New chat
+          <span>New chat</span>
         </button>
+
+        {/* ── New User button ── */}
+        <button
+          type="button"
+          className="sidebar-new-user"
+          onClick={handleNewUser}
+          title="Create a new user profile"
+        >
+          <IconUserPlus className="icon" />
+          <span>New User</span>
+        </button>
+
+        {/* ── Switch User button + dropdown ── */}
+        <button
+          type="button"
+          className={`sidebar-switch-user ${switchUserOpen ? 'is-open' : ''}`}
+          onClick={() => setSwitchUserOpen((o) => !o)}
+          title="Switch between saved user profiles"
+          aria-expanded={switchUserOpen}
+        >
+          <IconUsersSwap className="icon" />
+          <span>Switch User</span>
+          <svg className="switch-user-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+            <path d={switchUserOpen ? 'M18 15l-6-6-6 6' : 'M6 9l6 6 6-6'} />
+          </svg>
+        </button>
+
+        {/* ── Switch User dropdown panel ── */}
+        {switchUserOpen && (
+          <div className="switch-user-panel">
+            {allProfiles.length === 0 ? (
+              <div className="switch-user-empty">No other profiles saved yet.</div>
+            ) : (
+              allProfiles.map(({ uid, profile }) => (
+                <button
+                  key={uid}
+                  type="button"
+                  className={`switch-user-card ${uid === activeUserId ? 'is-active' : ''}`}
+                  onClick={() => handleSwitchUser(uid)}
+                  title={uid === activeUserId ? 'Currently active' : `Switch to ${profile.name}`}
+                >
+                  <div className="switch-user-avatar">
+                    {profile.name ? profile.name.charAt(0).toUpperCase() : '?'}
+                  </div>
+                  <div className="switch-user-info">
+                    <span className="switch-user-name">{profile.name || 'Unknown'}</span>
+                    <span className="switch-user-meta">
+                      {profile.customQualification || profile.qualification || ''}
+                      {(profile.customStream || profile.stream) ? ` · ${profile.customStream || profile.stream}` : ''}
+                    </span>
+                  </div>
+                  {uid === activeUserId && (
+                    <span className="switch-user-active-dot" title="Active" />
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        )}
+
         <div className="sidebar-section-label">Recent</div>
         <div className="sidebar-sessions">
           {sessionsLoading && <div className="sidebar-muted">Loading…</div>}
